@@ -11,19 +11,31 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(tidyverse)
+library(caret)
+library(randomForest)
+library(rio)
+library(mltools)
+library(data.table)
 ```
 
 ```{r}
-penguins <- read_csv('~/Fall21/introDS/DS3001_FinalProject/penguins_lter.csv')
+penguins <- read_csv("C:\\Users\\mktra\\Desktop\\DS3001_FinalProject\\penguins_lter.csv")
 
+colnames(penguins) <- c("Study_Name","Sample_Number","Species","Region","Island","Stage","ID","Clutch_Completion","Date_Egg","Culmen_Length","Culmen_Depth","Flipper_Length","Body_Mass","Sex","Delta_15_N","Delta_13_C","Comments")
 ```
 
 ```{r}
 penguins_clean <- penguins[c(3, 5, 8, 10, 11, 12, 13, 14, 15, 16)]
 
+colnames(penguins_clean) <- c("Species","Island","Clutch_Completion","Culmen_Length","Culmen_Depth","Flipper_Length","Body_Mass","Sex","Delta_15_N","Delta_13_C")
+
 penguins_clean$Species <- recode(penguins_clean$Species, "Adelie Penguin (Pygoscelis adeliae)" = "Adelie", "Chinstrap penguin (Pygoscelis antarctica)" = "Chinstrap", "Gentoo penguin (Pygoscelis papua)" = "Gentoo")
 
 penguins_clean$`Clutch Completion` <- recode(penguins_clean$`Clutch Completion`, "Yes" = 1, "No" = 0)
+
+penguins_clean$Sex <- recode(penguins_clean$Sex,
+                         "FEMALE" = 0,
+                         "MALE" = 1)
 
 penguins_clean[penguins_clean == "."] <- NA
 
@@ -42,6 +54,7 @@ penguins_clean %>%
 
 
 ```
+
 ```{r}
 penguins_clean %>%
   filter(Species == "Adelie") %>%
@@ -62,5 +75,94 @@ penguins_clean %>%
   ggplot(aes(Species, fill = Species)) + 
   geom_bar() +
   facet_wrap(~ Island, ncol = 3)
+```
+
+```{r}
+# Take care of missing data
+table(is.na(penguins_clean)) # missing 46
+penguins_clean <- penguins_clean[complete.cases(penguins_clean), ]
+dim(penguins_clean)
+table(is.na(penguins_clean))
+```
+
+```{r}
+# Create test, tune and training sets 
+part_index_1 <- caret::createDataPartition(penguins_clean$Sex,
+                                           times=1,
+                                           p = 0.50,
+                                           groups=1,
+                                           list=FALSE)
+
+train <- penguins_clean[part_index_1, ]
+tune_and_test <- penguins_clean[-part_index_1, ]
+
+#The we need to use the function again to create the tuning set 
+
+tune_and_test_index <- createDataPartition(tune_and_test$Sex,
+                                           p = .5,
+                                           list = FALSE,
+                                           times = 1)
+
+tune <- tune_and_test[tune_and_test_index, ]
+test <- tune_and_test[-tune_and_test_index, ]
+
+
+dim(train)
+dim(test)
+dim(tune)
+```
+
+```{r}
+# Calculate the initial mtry level 
+mytry_tune <- function(x){
+  xx <- dim(x)[2]-1
+  sqrt(xx)
+}
+       
+mytry_tune(penguins_clean)
+```
+
+```{r}
+# Run the initial RF model
+set.seed(2023)
+penguins_RF = randomForest(Sex~.,          #<- Formula: response variable ~ predictors.
+                            #   The period means 'use all other variables in the data'.
+                            train,     #<- A data frame with the variables to be used.
+                            #y = NULL,           #<- A response vector. This is unnecessary because we're specifying a response formula.
+                            #subset = NULL,      #<- This is unnecessary because we're using all the rows in the training data set.
+                            #xtest = NULL,       #<- This is already defined in the formula by the ".".
+                            #ytest = NULL,       #<- This is already defined in the formula by "PREGNANT".
+                            ntree = 500,        #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
+                            mtry = 3,            #<- Number of variables randomly sampled as candidates at each split. Default number for classification is sqrt(# of variables). Default number for regression is (# of variables / 3).
+                            replace = TRUE,      #<- Should sampled data points be replaced.
+                            #classwt = NULL,     #<- Priors of the classes. Use this if you want to specify what proportion of the data SHOULD be in each class. This is relevant if your sample data is not completely representative of the actual population 
+                            #strata = NULL,      #<- Not necessary for our purpose here.
+                            sampsize = 50,      #<- Size of sample to draw each time.
+                            nodesize = 5,        #<- Minimum numbers of data points in terminal nodes.
+                            #maxnodes = NULL,    #<- Limits the number of maximum splits. 
+                            importance = TRUE,   #<- Should importance of predictors be assessed?
+                            #localImp = FALSE,   #<- Should casewise importance measure be computed? (Setting this to TRUE will override importance.)
+                            proximity = TRUE,    #<- Should a proximity measure between rows be calculated?
+                            norm.votes = TRUE,   #<- If TRUE (default), the final result of votes are expressed as fractions. If FALSE, raw vote counts are returned (useful for combining results from different runs).
+                            do.trace = TRUE,     #<- If set to TRUE, give a more verbose output as randomForest is run.
+                            keep.forest = TRUE,  #<- If set to FALSE, the forest will not be retained in the output object. If xtest is given, defaults to FALSE.
+                            keep.inbag = TRUE)   #<- Should an n by ntree matrix be returned that keeps track of which samples are in-bag in which trees?
+```
+
+```{r}
+# Look at the output of the random forest
+penguins_RF
+
+# This is how you can call up the criteria we set for the random forest:
+penguins_RF$call
+
+# Call up the confusion matrix and check the accuracy of the model.
+penguins_RF$confusion
+penguins_RF_acc = sum(penguins_RF$confusion[row(penguins_RF$confusion) == 
+                                                col(penguins_RF$confusion)]) / 
+  sum(penguins_RF$confusion)
+
+penguins_RF_acc
+# 0.89ish
 ```
 
