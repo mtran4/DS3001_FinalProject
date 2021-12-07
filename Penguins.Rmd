@@ -2,7 +2,9 @@
 title: "Penguins"
 author: "Maggie Tran"
 date: "12/6/2021"
-output: html_document
+output: 
+  rmarkdown::html_document
+  theme: hpstr
 ---
 
 ```{r setup, include=FALSE}
@@ -10,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+#install.packages("prettydoc")
 library(tidyverse)
 library(caret)
 library(randomForest)
@@ -19,7 +22,7 @@ library(data.table)
 ```
 
 ```{r}
-penguins <- read_csv("C:\\Users\\mktra\\Desktop\\DS3001_FinalProject\\penguins_lter.csv")
+penguins <- read_csv("penguins_lter.csv")
 
 colnames(penguins) <- c("Study_Name","Sample_Number","Species","Region","Island","Stage","ID","Clutch_Completion","Date_Egg","Culmen_Length","Culmen_Depth","Flipper_Length","Body_Mass","Sex","Delta_15_N","Delta_13_C","Comments")
 ```
@@ -31,7 +34,7 @@ colnames(penguins_clean) <- c("Species","Island","Clutch_Completion","Culmen_Len
 
 penguins_clean$Species <- recode(penguins_clean$Species, "Adelie Penguin (Pygoscelis adeliae)" = "Adelie", "Chinstrap penguin (Pygoscelis antarctica)" = "Chinstrap", "Gentoo penguin (Pygoscelis papua)" = "Gentoo")
 
-penguins_clean$`Clutch Completion` <- recode(penguins_clean$`Clutch Completion`, "Yes" = 1, "No" = 0)
+penguins_clean$Clutch_Completion <- recode(penguins_clean$Clutch_Completion, "Yes" = 1, "No" = 0)
 
 penguins_clean$Sex <- recode(penguins_clean$Sex,
                          "FEMALE" = 0,
@@ -112,6 +115,8 @@ dim(test)
 dim(tune)
 ```
 
+
+## Calculating the Initial mtry level 
 ```{r}
 # Calculate the initial mtry level 
 mytry_tune <- function(x){
@@ -121,7 +126,7 @@ mytry_tune <- function(x){
        
 mytry_tune(penguins_clean)
 ```
-
+## Running the Random Forest model
 ```{r}
 # Run the initial RF model
 set.seed(2023)
@@ -149,6 +154,7 @@ penguins_RF = randomForest(Sex~.,          #<- Formula: response variable ~ pred
                             keep.inbag = TRUE)   #<- Should an n by ntree matrix be returned that keeps track of which samples are in-bag in which trees?
 ```
 
+## Output of the Random Forest 
 ```{r}
 # Look at the output of the random forest
 penguins_RF
@@ -165,4 +171,26 @@ penguins_RF_acc = sum(penguins_RF$confusion[row(penguins_RF$confusion) ==
 penguins_RF_acc
 # 0.89ish
 ```
+
+
+## Evaluation Metrics 
+```{r}
+#View the percentage of trees that voted for each data point to be in each class 
+View(as.data.frame(penguins_RF$votes))
+
+# View the "predicted" argument that contains a vector of predictions for each data point 
+View(as.data.frame(penguins_RF$predicted))
+
+# View the importance of each variable 
+View(as.data.frame(importance(penguins_RF, type=2, scale=TRUE)))
+
+# The most important variable in determining the penguin's gender is the Species of the penguin based on a Mean Decrease Gini value of 0.997
+
+# Using the proximity to find the average number of trees for which the data points occupy the same terminal node 
+str(as.data.frame(penguins_RF$proximity))
+View(as.data.frame(penguins_RF$proximity))
+
+```
+
+
 
