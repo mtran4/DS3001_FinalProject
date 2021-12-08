@@ -234,24 +234,23 @@ penguins_RF_2 = randomForest(Sex~.,          #<- Formula: response variable ~ pr
 ## Comparison between the Random Forest Models 
 ```{r}
 penguins_RF$confusion 
+#    0   1 class.error
+#0 110  13  0.10569106
+#1  12 109  0.09917355
 penguins_RF_2$confusion
-#   0  1 class.error
-#0 73  9  0.10975610
-#1  7 74  0.08641975
+#    0   1 class.error
+#0 111  12  0.09756098
+#1  12 109  0.09917355
 
+# Second Model Error Rates
 # False Positive Rate 
-9/(9+74) # 0.108 
+12/(12+111) # 0.098
 
 # Specificity
-1 - 9/(9+74) # 0.892
+1 - 12/(12+111) # 0.902
 
 # True Positive Rate 
-73/(73+7) # 0.913
-
-penguins_RF_2$confusion
-#   0  1 class.error
-#0 72 10  0.12195122
-#1 11 70   0.1358025
+109/(109+12) # 0.901
 
 varImpPlot(penguins_RF_2, main = "Important Factors for Identifying the Sex of Penguins", color = "blue", lcolor = "orange")
 ``` 
@@ -304,12 +303,11 @@ confusionMatrix(penguins_test_pred$Prediction, penguins_test_pred$Sex, positive=
 
 ### ROC Curve 
 ```{r}
+library(ROCR)
+peng_roc <- roc(penguins_test_pred$Sex, as.numeric(penguins_test_pred$Prediction), plot=TRUE)
 penguins_RF_2_prediction = as.data.frame(as.numeric(as.character(penguins_RF_2$votes[,2])))
 View(penguins_RF_2_prediction)
-
-# Let's also take the actual classification of each data point and convert
-# it to a data frame with numbers. R classifies a point in either bucket 
-# at a 50% threshold.
+.
 penguins_train_actual = data.frame(train[,8])
 
 View(penguins_train_actual)
@@ -366,6 +364,18 @@ abline(a = 0,
        lwd = 2,
        lty = 2,
        col = "gray")
+
+# Finding the AUC Value 
+penguins_auc_RF = performance(penguins_prediction_comparison, 
+                               "auc")@y.values[[1]]
+penguins_auc_RF
+
+# Add the AUC value to the ROC plot.
+text(x = 0.5, 
+     y = 0.5, 
+     labels = paste0("AUC = ", 
+                     round(penguins_auc_RF,
+                           2)))
 
 ```
 
