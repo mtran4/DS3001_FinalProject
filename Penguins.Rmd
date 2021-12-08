@@ -239,9 +239,58 @@ penguins_RF_2 = randomForest(Sex~.,          #<- Formula: response variable ~ pr
                             keep.inbag = TRUE)   #<- Should an n by ntree matrix be returned that keeps track of which samples are in-bag in which trees?
 ``` 
 
-
+## Comparison between the Random Forest Models 
 ```{r}
+penguins_RF$confusion 
+#   0  1 class.error
+#0 73  9  0.10975610
+#1  7 74  0.08641975
 
+# False Positive Rate 
+9/(9+74) # 0.108 
+
+# Specificity
+1 - 9/(9+74) # 0.892
+
+# True Positive Rate 
+73/(73+7) # 0.913
+
+penguins_RF_2$confusion
+#   0  1 class.error
+#0 72 10  0.12195122
+#1 11 70   0.1358025
 
 ``` 
+
+Based on the results from the confusion matrix, the first model has a lower classification error rate than the second model. The first model is better at classifying both 
+
+
+```{r}
+# penguins_predict = predict(penguins_RF_2,      #<- a randomForest model
+#                             test,      #<- the test data set to use
+#                             type = "response",   #<- what results to produce, see the help menu for the options
+#                             predict.all = FALSE,  #<- should the predictions of all trees be kept?
+#                             proximity = FALSE)
+
+#View(penguins_predict)
+```
+
+
+
+
+
+```{r}
+hist(treesize(penguins_RF_2, terminal=FALSE))
+
+```
+
+## Final Results 
+
+## Conclusion 
+
+## Future Work 
+
+
+
+
 
