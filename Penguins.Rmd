@@ -266,10 +266,6 @@ penguins_predict = predict(penguins_RF_2,      #<- a randomForest model
                             predict.all = TRUE,  #<- should the predictions of all trees be kept?
                             proximity = FALSE)    #<- should proximity measures be computed
 
-View(penguins_predict)
-View(penguins_predict$aggregate)
-View(penguins_predict$individual)
-
 penguins_train_pred = data.frame(train,Prediction = penguins_predict$aggregate)
 View(penguins_train_pred)
 
