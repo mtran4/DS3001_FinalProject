@@ -19,6 +19,7 @@ library(randomForest)
 library(rio)
 library(mltools)
 library(data.table)
+library(plotly)
 ```
 
 ```{r}
@@ -193,4 +194,54 @@ View(as.data.frame(penguins_RF$proximity))
 ```
 
 
+## Visualizing the Random Forest Results
+```{r}
+penguins_RF_error = data.frame(1:nrow(penguins_RF$err.rate), penguins_RF$err.rate)
+colnames(penguins_RF_error) = c("Number of Trees", "Out of Bag", "Female", "Male")
+
+penguins_RF_error$Diff <- penguins_RF_error$Male-penguins_RF_error$Female
+
+rm(fig)
+fig <- plot_ly(x=penguins_RF_error$`Number of Trees`, y=penguins_RF_error$Diff,name="Diff", type = 'scatter', mode = 'lines')
+fig <- fig %>% add_trace(y=penguins_RF_error$`Out of Bag`, name="OOB_Er")
+fig <- fig %>% add_trace(y=penguins_RF_error$Female, name="Female")
+fig <- fig %>% add_trace(y=penguins_RF_error$Male, name="Male")
+
+fig
+
+```
+
+
+## Optimizing the Random Forest Model 
+```{r}
+set.seed(2022)
+penguins_RF_2 = randomForest(Sex~.,          #<- Formula: response variable ~ predictors.
+                            #   The period means 'use all other variables in the data'.
+                            train,     #<- A data frame with the variables to be used.
+                            #y = NULL,           #<- A response vector. This is unnecessary because we're specifying a response formula.
+                            #subset = NULL,      #<- This is unnecessary because we're using all the rows in the training data set.
+                            #xtest = NULL,       #<- This is already defined in the formula by the ".".
+                            #ytest = NULL,       #<- This is already defined in the formula by "PREGNANT".
+                            ntree = 600,        #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
+                            mtry = 3,            #<- Number of variables randomly sampled as candidates at each split. Default number for classification is sqrt(# of variables). Default number for regression is (# of variables / 3).
+                            replace = TRUE,      #<- Should sampled data points be replaced.
+                            #classwt = NULL,     #<- Priors of the classes. Use this if you want to specify what proportion of the data SHOULD be in each class. This is relevant if your sample data is not completely representative of the actual population 
+                            #strata = NULL,      #<- Not necessary for our purpose here.
+                            sampsize = 25,      #<- Size of sample to draw each time.
+                            nodesize = 5,        #<- Minimum numbers of data points in terminal nodes.
+                            #maxnodes = NULL,    #<- Limits the number of maximum splits. 
+                            importance = TRUE,   #<- Should importance of predictors be assessed?
+                            #localImp = FALSE,   #<- Should casewise importance measure be computed? (Setting this to TRUE will override importance.)
+                            proximity = TRUE,    #<- Should a proximity measure between rows be calculated?
+                            norm.votes = TRUE,   #<- If TRUE (default), the final result of votes are expressed as fractions. If FALSE, raw vote counts are returned (useful for combining results from different runs).
+                            do.trace = TRUE,     #<- If set to TRUE, give a more verbose output as randomForest is run.
+                            keep.forest = TRUE,  #<- If set to FALSE, the forest will not be retained in the output object. If xtest is given, defaults to FALSE.
+                            keep.inbag = TRUE)   #<- Should an n by ntree matrix be returned that keeps track of which samples are in-bag in which trees?
+``` 
+
+
+```{r}
+
+
+``` 
 
