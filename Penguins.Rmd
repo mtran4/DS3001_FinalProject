@@ -1,18 +1,20 @@
 ---
-title: "Penguins"
-author: "Maggie Tran"
+title: "Determing Penguin's Sex Using Random Forest Modeling"
+author: "Maggie Tran, Courtney Kennedy, Josephine Johannes"
 date: "12/6/2021"
 output: 
-  rmarkdown::html_document
-  theme: hpstr
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    theme: cosmo
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE, cache = TRUE)
 ```
 
-```{r}
-#install.packages("prettydoc")
+```{r echo=FALSE}
+library(prettydoc)
 library(tidyverse)
 library(caret)
 library(randomForest)
@@ -22,58 +24,145 @@ library(data.table)
 library(plotly)
 ```
 
-```{r}
+```{r echo=FALSE}
+#Read in penguin dataset
 penguins <- read_csv("penguins_lter.csv")
 
+#Rename columns
 colnames(penguins) <- c("Study_Name","Sample_Number","Species","Region","Island","Stage","ID","Clutch_Completion","Date_Egg","Culmen_Length","Culmen_Depth","Flipper_Length","Body_Mass","Sex","Delta_15_N","Delta_13_C","Comments")
 ```
 
-```{r}
+```{r echo = FALSE}
+#Select relevant columns
 penguins_clean <- penguins[c(3, 5, 8, 10, 11, 12, 13, 14, 15, 16)]
 
+#Rename columns
 colnames(penguins_clean) <- c("Species","Island","Clutch_Completion","Culmen_Length","Culmen_Depth","Flipper_Length","Body_Mass","Sex","Delta_15_N","Delta_13_C")
 
+#Recode the long names of species to nicknames
 penguins_clean$Species <- recode(penguins_clean$Species, "Adelie Penguin (Pygoscelis adeliae)" = "Adelie", "Chinstrap penguin (Pygoscelis antarctica)" = "Chinstrap", "Gentoo penguin (Pygoscelis papua)" = "Gentoo")
 
+#Recode yes or no to 1 and 0
 penguins_clean$Clutch_Completion <- recode(penguins_clean$Clutch_Completion, "Yes" = 1, "No" = 0)
 
+#Recode Female to 0 and Male to 1
 penguins_clean$Sex <- recode(penguins_clean$Sex,
                          "FEMALE" = 0,
                          "MALE" = 1)
 
+#Change . to NA value
 penguins_clean[penguins_clean == "."] <- NA
 
-
+#Create factor variables where applicable
 penguins_clean[c(1,2,3,8)] <- lapply(penguins_clean[c(1,2,3,8)], function(x) as.factor(x))
 
-str(penguins_clean)
+#Check Structure
+#str(penguins_clean)
     
 ``` 
 
-```{r}
+## Questions and Background Information
+<img src = "https://imgur.com/orZWHly.png">
+
+**Question:** Using the information provided, can we determine the sex of a penguin without having to take biological samples of a penguin?
+
+**Background Information:**  Penguins are usually a fan-favorite of any zoo or aquarium.  However they live in the wild in Antarctica.  Researchers have been documenting penguin populations on three islands in Antarctica, and recording different measurements and features to keep track of the penguins populations as climate change occurs.  It is important to have an understanding of the male and female populations in colonies, however, this is difficult because penguins are sexually monomorphic birds. This means that both biological sexes are phenotypically indistinguishable from each other.  There are two methods to identifying the sex of a penguin. The traditional methods included cloacal examination, biochemical and cytogenic analysis, and sound discrimination, which can stress out the penguins. The other method includes using a molecular method for sex identification, however this requires using amplification of the chromo-helicase-DNA-binding 1 gene found on the sex chromosomes, which is a complicated procedure. These processes can be complex and require long hours in the lab. However, our model is predicted to make this identification method easier and more efficient.
+
+Check out more about Penguin Sex Identification [here](https://onlinelibrary.wiley.com/doi/full/10.1002/zoo.21005?casa_token=HT0HLZapWlcAAAAA%3A_-SB5sQXejbKjXsxxiIJ1KfNCumDxsOf3fGB57Z_BUK6VBWD8nX-WGAut1r_HoDtayb3fr5iyeaQayx3)
+
+**Dataset** We will be looking at a [dataset](https://www.kaggle.com/parulpandey/penguin-dataset-the-new-iris/data) of 344 penguins from Palmer Archipelago (Antarctica).
+
+The variables used in the analysis are:
+
+* species: penguin species (Chinstrap, Adélie, or Gentoo)
+* culmen_length_mm: culmen length (mm)
+* culmen_depth_mm: culmen depth (mm)
+* flipper_length_mm: flipper length (mm)
+* body_mass_g: body mass (g)
+* island: island name (Dream, Torgersen, or Biscoe) in the Palmer Archipelago (Antarctica)
+* sex: penguin sex
+
+Note: The culmen is the upper ridge of a bird's beak
+
+## Exploratory Data Analysis 
+
+### Species Breakdown 
+The Chinstrap penguin is the least common, however the count overall is pretty similar indicating there is not a strong unbalence in the data by species.
+
+```{r echo = FALSE}
+#Create bar chart of species count
 penguins_clean %>%
-  mutate(Species = Species %>% fct_infreq() %>% fct_rev())%>%
+  mutate(Species = Species %>% fct_infreq() %>% fct_rev())%>% #reorder from least to greatest
   ggplot(aes(x=Species, fill = Species)) +
-  geom_bar()
-
-
+  geom_bar() +
+  ggtitle("Species Count of Penguins")
 ```
 
-```{r}
+### Sex Breakdown
+Overall all penguin species have an even split of male and female penguins.  The NA values represent the penguins whose sex was not able to be identified, which the goal of the model is to be able to predict those unknown values for researches documenting penguins.
+
+```{r echo = FALSE}
+#Create bar chart of species count
+penguins_clean %>%
+  ggplot(aes(x=Sex, fill = Sex)) +
+  geom_bar() +
+  ggtitle("Sex Count of Penguins")
+```
+
+### Penguin Summary Statistics {.tabset}
+Within each species there is also an even split of male and female penguins.  The summary statistics also show the distributions of the other variables used to predict the sex.     
+
+#### Adelie Summary
+
+```{r echo=FALSE}
+penguins_clean %>%
+  filter(Species == "Adelie") %>%
+  ggplot(aes(x=Sex, fill = Sex)) +
+  geom_bar() +
+  ggtitle("Male and Female Count of Adelie Penguins")
+```
+
+```{r echo=FALSE}
 penguins_clean %>%
   filter(Species == "Adelie") %>%
   summary()
+```
 
+#### Chinstrap Summary
+
+```{r echo=FALSE}
+penguins_clean %>%
+  filter(Species == "Chinstrap") %>%
+  ggplot(aes(x=Sex, fill = Sex)) +
+  geom_bar() +
+  ggtitle("Male and Female Count of Chinstrap Penguins")
+```
+
+```{r echo=FALSE}
 penguins_clean %>%
   filter(Species == "Chinstrap") %>%
   summary()
+```
 
+#### Gentoo Summary
+```{r echo=FALSE}
+penguins_clean %>%
+  filter(Species == "Gentoo") %>%
+  ggplot(aes(x=Sex, fill = Sex)) +
+  geom_bar() +
+  ggtitle("Male and Female Count of Gentoo Penguins")
+```
+
+```{r echo=FALSE}
 penguins_clean %>%
   filter(Species == "Gentoo") %>%
   summary()
 ```
 
-```{r}
+### Island Breakdown
+Adelie are the only penguin to appear on every island. The Gentoo are only on Biscoe and the Chinstrap are only on Dream.  This indicates that there is something specific about the environment of each island that is optimal for the different species of penguins.
+
+```{r echo = FALSE}
 penguins_clean %>%
   group_by(Island) %>%
   ggplot(aes(Species, fill = Species)) + 
@@ -81,7 +170,11 @@ penguins_clean %>%
   facet_wrap(~ Island, ncol = 3)
 ```
 
-```{r}
+## Method
+
+The Random Forest model was used to predict the sex of a penguin solely from its physical features (such as flipper length and body mass) rather than a biological sample (such as a blood test). The Random Forest model was chosen in an attempt to avoid the problem of over-fitting which is important to consider especially with a smaller dataset such as the penguin dataset. Since there is less data, the model is more likely to pick up any “noise” or fluctuations in the training data and consequently learn those as rules or concepts. Unlike using a single decision tree, the Random Forest model reduces over-fitting through bootstrapping: it uses many different decision trees to evaluate different subsets of variables on different subsets of data. In the case of determining the sex of a penguin where male is arbitrarily defined as the positive class, both false positives and false negatives are about equally undesirable, so we do not necessarily need to favor reduction of one over the other (unlike with cancer data, for example, where false negatives are more detrimental than false positives). Thus, our model aims to reduce both error rates as much as possible in order to have an accurate understanding of a given population of penguins and potentially use this data for related areas of research such as reproduction rates or sex-based disease studies. To begin, we split the data into 50% train, 25% tune, and 25% test. However, when we ran the model on this split, it was giving unexpected results that we concluded must have been due to the fact that the tune set was so small. For example, the OOB graph suggested that we decrease the number of trees, but when this change was made, the model performed worse, despite changing other hyperparameters such as sample size. Thus, we decided to resplit the dataset into 75% train and 25% test, and use the train dataset to tune the model. This produced much better results.   
+
+```{r echo = FALSE, results='hide'}
 # Take care of missing data
 table(is.na(penguins_clean)) # missing 46
 penguins_clean <- penguins_clean[complete.cases(penguins_clean), ]
@@ -89,7 +182,7 @@ dim(penguins_clean)
 table(is.na(penguins_clean))
 ```
 
-```{r}
+```{r echo = FALSE, results='hide'}
 # Create test, tune and training sets 
 part_index_1 <- caret::createDataPartition(penguins_clean$Sex,
                                            times=1,
@@ -106,9 +199,7 @@ dim(train)
 dim(test)
 ```
 
-
-## Calculating the Initial mtry level 
-```{r}
+```{r echo = FALSE, results='hide'}
 # Calculate the initial mtry level 
 mytry_tune <- function(x){
   xx <- dim(x)[2]-1
@@ -117,8 +208,8 @@ mytry_tune <- function(x){
        
 mytry_tune(penguins_clean)
 ```
-## Running the Random Forest model
-```{r}
+
+```{r echo = FALSE, results='hide'}
 # Run the initial RF model
 set.seed(2023)
 penguins_RF = randomForest(Sex~.,          #<- Formula: response variable ~ predictors.
@@ -145,27 +236,36 @@ penguins_RF = randomForest(Sex~.,          #<- Formula: response variable ~ pred
                             keep.inbag = TRUE)   #<- Should an n by ntree matrix be returned that keeps track of which samples are in-bag in which trees?
 ```
 
-## Output of the Random Forest 
-```{r}
+```{r echo = FALSE, results='hide'}
 # Look at the output of the random forest
-penguins_RF
+ penguins_RF
 
 # This is how you can call up the criteria we set for the random forest:
-penguins_RF$call
+ penguins_RF$call
 
+```
+
+### Evaluation of First Model
+According to the confusion matrix, the initial model had a false positive classification error rate of 10.6% and a false negative classification error rate of 9.99%. The True Positive rate was calculated to be 89.3% while the True Negative rate was calculated to be 90.2%. Thus, the initial model is slightly better at predicting female penguins than male penguins, but they are very close, which is what we desired.
+
+#### Confusion Matrix of original Model
+```{r echo=FALSE}
 # Call up the confusion matrix and check the accuracy of the model.
 penguins_RF$confusion
 penguins_RF_acc = sum(penguins_RF$confusion[row(penguins_RF$confusion) == 
                                                 col(penguins_RF$confusion)]) / 
   sum(penguins_RF$confusion)
+```
 
+#### Accuracy of orginial Model
+```{r echo=FALSE}
 penguins_RF_acc
 # 0.89ish
 ```
 
 
-## Evaluation Metrics 
-```{r}
+```{r echo=FALSE, results='hide'}
+### Evaluation Metrics 
 #View the percentage of trees that voted for each data point to be in each class 
 View(as.data.frame(penguins_RF$votes))
 
@@ -184,8 +284,10 @@ View(as.data.frame(penguins_RF$proximity))
 ```
 
 
-## Visualizing the Random Forest Results
-```{r}
+### Visualizing the Random Forest Results
+The figure shows that the error starts to level out at around 200 trees. To improve our model, we decreased the number of trees and increased the sample size. The number of trees was set to 200 trees and the sample size was set to 30 and the node size was set to 3. 
+
+```{r echo=FALSE}
 penguins_RF_error = data.frame(1:nrow(penguins_RF$err.rate), penguins_RF$err.rate)
 colnames(penguins_RF_error) = c("Number of Trees", "Out of Bag", "Female", "Male")
 
@@ -201,11 +303,9 @@ fig
 
 ```
 
-From the plot, we see that the error starts to even out at 100 trees so we'll change the model to 100 trees. 
-
-
-## Optimizing the Random Forest Model 
-```{r}
+ 
+```{r echo=FALSE, results='hide'}
+# Optimizing the Random Forest Model
 set.seed(2022)
 penguins_RF_2 = randomForest(Sex~.,          #<- Formula: response variable ~ predictors.
                             #   The period means 'use all other variables in the data'.
@@ -231,34 +331,51 @@ penguins_RF_2 = randomForest(Sex~.,          #<- Formula: response variable ~ pr
                             keep.inbag = TRUE)   #<- Should an n by ntree matrix be returned that keeps track of which samples are in-bag in which trees?
 ``` 
 
-## Comparison between the Random Forest Models 
-```{r}
+### Comparison between the Random Forest Models 
+
+The false positive classification error rate decreased from the first model of 10.6% to 9.8% in the second model. The false negative classification error rate stayed the same at 9.99%.  The specificity of the model was calculated to be 90.2%, which is a good number for the model and the True Positive rate was calculated to be 90.1% which signifies that the model does well in predicting male penguins. The evaluation metrics combined further indicate that the second optimized model is able to better predict male penguins and similarly predicts the female penguins when compared to the original model. 
+
+#### Orginal Model Confusion Matrix
+```{r echo=FALSE}
 penguins_RF$confusion 
 #    0   1 class.error
 #0 110  13  0.10569106
 #1  12 109  0.09917355
+```
+
+#### Tuned Model Confusion Matrix
+```{r echo=FALSE}
 penguins_RF_2$confusion
 #    0   1 class.error
 #0 111  12  0.09756098
 #1  12 109  0.09917355
+```
 
+#### Tuned Model Error Rates
+```{r echo=FALSE }
 # Second Model Error Rates
-# False Positive Rate 
+print("False Positive Rate")
 12/(12+111) # 0.098
 
-# Specificity
+print("Specificity")
 1 - 12/(12+111) # 0.902
 
-# True Positive Rate 
+print("True Positive Rate") 
 109/(109+12) # 0.901
+```
 
+#### Variable Importance
+When the variable importances are plotted, it is shown that the body mass and the culmen depth of a penguin are the two most important factors in determining a penguin’s sex. The higher the mean decrease accuracy and the mean decrease gini, the more important a factor is.
+
+```{r echo=FALSE}
 varImpPlot(penguins_RF_2, main = "Important Factors for Identifying the Sex of Penguins", color = "blue", lcolor = "orange")
 ``` 
 
+### Predictions with the Training Data Set Confusion Matrix 
 
+The accuracy of the dataset was found to be 93% which means that the model’s ability to predict the sex of the penguin is trustworthy. The accuracy is a good evaluation metric for this data set because the data set is considered more balanced than unbalanced. The sensitivity of the model is 93.4% which means that the model is able to accurately predict a male penguin in the dataset. The prevalence, also known as base rate, of a male penguin in the dataset was calculated to be 49.6%. The detection prevalence of male penguins in the dataset from the model was calculated to be 50% which is similar to the base rate. 
 
-## Predictions with the Training Data Set 
-```{r}
+```{r echo=FALSE}
 penguins_predict = predict(penguins_RF_2,      #<- a randomForest model
                             train,      #<- the train data set to use
                             type = "response",   #<- what results to produce, see the help menu for the options
@@ -266,116 +383,117 @@ penguins_predict = predict(penguins_RF_2,      #<- a randomForest model
                             proximity = FALSE)    #<- should proximity measures be computed
 
 penguins_train_pred = data.frame(train,Prediction = penguins_predict$aggregate)
-View(penguins_train_pred)
+#View(penguins_train_pred)
 
 # Create a confusion matrix 
 confusionMatrix(penguins_train_pred$Prediction, penguins_train_pred$Sex, positive="1",dnn=c("Prediction", "Actual"), mode="everything")
 
 
 ```
-* write about evaluation metrics here and which ones mean the most 
-* sensitivity, and specificity
-* less gentoo -- but not a significant imbalance
-* accuracy -- data is balanced 
-* talk about prevalence -- The data shows a baserate of 49.6% male penguins. 
+ 
 
-## Predictions with the Test Data Set 
-```{r}
+## Evaluation
+
+### Predictions with the Test Data Set Confusion Matrix
+
+The model with the testing dataset also had an accuracy of 93%. The sensitivity of the model with the testing data is 90% and the specificity is 95% which gives us evidence that the model can be trusted to identify male penguins. 
+
+```{r echo=FALSE}
 penguins_predict_test = predict(penguins_RF_2,      #<- a randomForest model
                             test,      #<- the test data set to use
                             type = "response",   #<- what results to produce, see the help menu for the options
                             predict.all = TRUE,  #<- should the predictions of all trees be kept?
                             proximity = FALSE)    #<- should proximity measures be computed
 
-View(penguins_predict_test)
-View(penguins_predict_test$aggregate)
-View(penguins_predict_test$individual)
+#View(penguins_predict_test)
+#View(penguins_predict_test$aggregate)
+#View(penguins_predict_test$individual)
 
 penguins_test_pred = data.frame(test,Prediction = penguins_predict_test$aggregate)
-View(penguins_test_pred)
+#View(penguins_test_pred)
 
 # Create a confusion matrix 
 confusionMatrix(penguins_test_pred$Prediction, penguins_test_pred$Sex, positive="1",
                 dnn=c("Prediction", "Actual"), mode="everything")
 
 ```
-- talk about evaluation metrics for testing data here 
+
 
 ### ROC Curve 
-```{r}
-library(ROCR)
-peng_roc <- roc(penguins_test_pred$Sex, as.numeric(penguins_test_pred$Prediction), plot=TRUE)
-penguins_RF_2_prediction = as.data.frame(as.numeric(as.character(penguins_RF_2$votes[,2])))
-View(penguins_RF_2_prediction)
-.
-penguins_train_actual = data.frame(train[,8])
-
-View(penguins_train_actual)
-
-penguins_prediction_comparison = prediction(penguins_RF_2_prediction,           
-                                             penguins_train_actual)#<- a list or data frame with actual class assignments
-View(penguins_prediction_comparison)
-
-penguins_pred_performance = performance(penguins_prediction_comparison, 
-                                         measure = "tpr",    #<- performance measure to use for the evaluation
-                                         x.measure = "fpr")  #<- 2nd performance measure to use for the evaluation
-View(penguins_pred_performance)
-
-penguins_rates = data.frame(fp = penguins_prediction_comparison@fp,  #<- false positive classification.
-                             tp = penguins_prediction_comparison@tp,  #<- true positive classification.
-                             tn = penguins_prediction_comparison@tn,  #<- true negative classification.
-                             fn = penguins_prediction_comparison@fn)  #<- false negative classification.
-
-colnames(penguins_rates) = c("fp", "tp", "tn", "fn")
-
-View(penguins_rates)
-
-# Now let's calculate the true positive and false positive rates for the classification.
-str(penguins_rates)
-tpr = penguins_rates$tp / (penguins_rates$tp + penguins_rates$fn)
-fpr = penguins_rates$fp / (penguins_rates$fp + penguins_rates$tn)
-
-# Compare the values with the output of the performance() function, they are the same.
-penguins_rates_comparison = data.frame(penguins_pred_performance@x.values,
-                                        penguins_pred_performance@y.values,
-                                        fpr,
-                                        tpr)
-colnames(penguins_rates_comparison) = c("x.values","y.values","fpr","tpr") #<- rename columns accordingly.
-View(penguins_rates_comparison)
-
-# Now plot the results.
-plot(fpr,          #<- x-axis value.
-     tpr,          #<- y-axis value.
-     col = "blue",  #<- color of the line. 
-     type = "l")
-grid(col = "black")
-# The performance() function saves us a lot of time, and can be used directly
-# to plot the ROC curve.
-plot(penguins_pred_performance, 
-     col = "red", 
-     lwd = 3, 
-     main = "ROC curve")
-grid(col = "black")
-
-
-# Add a 45 degree line.
-abline(a = 0, 
-       b = 1,
-       lwd = 2,
-       lty = 2,
-       col = "gray")
-
-# Finding the AUC Value 
-penguins_auc_RF = performance(penguins_prediction_comparison, 
-                               "auc")@y.values[[1]]
-penguins_auc_RF
-
-# Add the AUC value to the ROC plot.
-text(x = 0.5, 
-     y = 0.5, 
-     labels = paste0("AUC = ", 
-                     round(penguins_auc_RF,
-                           2)))
+```{r echo=FALSE}
+# library(ROCR)
+# peng_roc <- roc(penguins_test_pred$Sex, as.numeric(penguins_test_pred$Prediction), plot=TRUE)
+# penguins_RF_2_prediction = as.data.frame(as.numeric(as.character(penguins_RF_2$votes[,2])))
+# View(penguins_RF_2_prediction)
+# .
+# penguins_train_actual = data.frame(train[,8])
+# 
+# View(penguins_train_actual)
+# 
+# penguins_prediction_comparison = prediction(penguins_RF_2_prediction,           
+#                                              penguins_train_actual)#<- a list or data frame with actual class assignments
+# View(penguins_prediction_comparison)
+# 
+# penguins_pred_performance = performance(penguins_prediction_comparison, 
+#                                          measure = "tpr",    #<- performance measure to use for the evaluation
+#                                          x.measure = "fpr")  #<- 2nd performance measure to use for the evaluation
+# View(penguins_pred_performance)
+# 
+# penguins_rates = data.frame(fp = penguins_prediction_comparison@fp,  #<- false positive classification.
+#                              tp = penguins_prediction_comparison@tp,  #<- true positive classification.
+#                              tn = penguins_prediction_comparison@tn,  #<- true negative classification.
+#                              fn = penguins_prediction_comparison@fn)  #<- false negative classification.
+# 
+# colnames(penguins_rates) = c("fp", "tp", "tn", "fn")
+# 
+# View(penguins_rates)
+# 
+# # Now let's calculate the true positive and false positive rates for the classification.
+# str(penguins_rates)
+# tpr = penguins_rates$tp / (penguins_rates$tp + penguins_rates$fn)
+# fpr = penguins_rates$fp / (penguins_rates$fp + penguins_rates$tn)
+# 
+# # Compare the values with the output of the performance() function, they are the same.
+# penguins_rates_comparison = data.frame(penguins_pred_performance@x.values,
+#                                         penguins_pred_performance@y.values,
+#                                         fpr,
+#                                         tpr)
+# colnames(penguins_rates_comparison) = c("x.values","y.values","fpr","tpr") #<- rename columns accordingly.
+# View(penguins_rates_comparison)
+# 
+# # Now plot the results.
+# plot(fpr,          #<- x-axis value.
+#      tpr,          #<- y-axis value.
+#      col = "blue",  #<- color of the line. 
+#      type = "l")
+# grid(col = "black")
+# # The performance() function saves us a lot of time, and can be used directly
+# # to plot the ROC curve.
+# plot(penguins_pred_performance, 
+#      col = "red", 
+#      lwd = 3, 
+#      main = "ROC curve")
+# grid(col = "black")
+# 
+# 
+# # Add a 45 degree line.
+# abline(a = 0, 
+#        b = 1,
+#        lwd = 2,
+#        lty = 2,
+#        col = "gray")
+# 
+# # Finding the AUC Value 
+# penguins_auc_RF = performance(penguins_prediction_comparison, 
+#                                "auc")@y.values[[1]]
+# penguins_auc_RF
+# 
+# # Add the AUC value to the ROC plot.
+# text(x = 0.5, 
+#      y = 0.5, 
+#      labels = paste0("AUC = ", 
+#                      round(penguins_auc_RF,
+#                            2)))
 
 ```
 
@@ -384,7 +502,20 @@ text(x = 0.5,
 
 ## Conclusion 
 
+The main question our model was trying to provide information for was if we can determine the sex of a penguin without having to take biological samples of a penguin?  The Palmer Archipelago (Antarctica) penguin data included records of 344 penguins, but multiple penguins were missing information about their sex.  According to the data this was due to the fact that “no blood sample obtained for sexing.”  We were able to successfully develop a model that would bypass the need for taking blood samples of the penguins to identify their sex or to fill in the gaps when the sex of the penguin was not able to be identified using traditional methods.  
+
+Using the random forest model we were limited to adjusting the number of trees, the sample size of each tree, mtry, and a few other variables.  Due to the small size of our data more repetitions of building trees and smaller sample sizes for each tree to ensure the same tree is not being built multiple times.  The random forest model that was built found that body mass and culmen depth are the most important variables in identifying the sex of a penguin.  Surprisingly the species of the penguin was on the lower side of importance, meaning that the factors that go into the sex of a penguin have less to do about what type of penguin it is and more about the build of the penguin.  
+
+Since the goal is to identify the penguin’s sex when it was not able to be identified using blood, there is not a specific preference to reduce false negative or false positives, rather to just reduce both as much as possible.  The positive class is Male therefore a false negative would be identifying a male as a female and a false positive would be identifying a female as a male.  When tuning our model we found that we were able to get the false positive rate to 10.6% and the false negative rate to 8.3%.  Overall since the data set is so small it is difficult to tell how this will transfer to penguin sex identification in the real world, but it appears that the model is able to identify the penguins sex without misclassifying over 90% of the time.  
+
+After using our test data to evaluate the model the overall accuracy is 82.5% with a specificity of 85% and sensitivity of 80%.  The prevalence of male penguins in the test data was 50%, so the performance of the model being in a range of about 80-85% indicates that the model is performing well.  While there is a decrease compared to the training data, this can be correlated to the fact that the data we have is so limited, minimizing the robustness of the model. One of the sub goals we had was to not overfit the data, and this can still be improved, but overall the model appears to be able to be applied to penguins outside of the training dataset.  
+
+Based on our evaluation we can conclude that the random forest model can be used by researchers to identify the sex of a penguin in the case that the traditional methods of sex identification can’t be performed.  With the increase of global warming, penguins are being studied to understand the effects, and the factor of sex is important in understanding how penguin populations are changing overtime.  While taking blood is the most accurate way of identifying the sex of a penguin, we feel that our model performs to the level that it can be an additional tool in conservation efforts.
+
+
 ## Future Work 
+
+The main limitation that was faced was the size of the penguin data available.  Overall there were only 344 penguins recorded in Palmer Archipelago (Antarctica).  This is due in part to the fact that it is difficult to find penguins who have not been tagged and recorded yet.  It is also due to the fact that the Penguin population in Antarctica is decreasing due to global warming limiting the habitable area for penguins.  Optimally to better understand how to identify the sex of a penguin more data would be needed to train our model. This data could come from zoos or historical data since the penguin populations in the wild are limited.  Additionally, it would be interesting to look at how the coloration of a penguin may affect the identification of their sex. Since many species look different depending on if they are male or female, if that information could be incorporated into the model it may lead to better identification. Since the long term goal of the model is to identify the penguin’s sex without having to draw blood it would also be interesting to see the model’s performance if the Delta 13 and Delta 15 blood isotope values were not included in the data. 
 
 
 
