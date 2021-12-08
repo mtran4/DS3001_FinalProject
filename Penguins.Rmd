@@ -269,10 +269,20 @@ Based on the results from the confusion matrix, the first model has a lower clas
 penguins_predict = predict(penguins_RF_2,      #<- a randomForest model
                             test,      #<- the test data set to use
                             type = "response",   #<- what results to produce, see the help menu for the options
-                            predict.all = FALSE,  #<- should the predictions of all trees be kept?
+                            predict.all = TRUE,  #<- should the predictions of all trees be kept?
                             proximity = FALSE)    #<- should proximity measures be computed
 
 View(penguins_predict)
+View(penguins_predict$aggregate)
+View(penguins_predict$individual)
+
+penguins_test_pred = data.frame(test,Prediction = penguins_predict$aggregate)
+View(penguins_test_pred)
+
+# Create a confusion matrix 
+confusionMatrix(penguins_test_pred$Prediction, penguins_test_pred$Sex, positive="1",
+                dnn=c("Prediction", "Actual"), mode="everything")
+
 
 ```
 
