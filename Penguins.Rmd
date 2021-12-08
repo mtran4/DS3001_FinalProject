@@ -93,27 +93,17 @@ table(is.na(penguins_clean))
 # Create test, tune and training sets 
 part_index_1 <- caret::createDataPartition(penguins_clean$Sex,
                                            times=1,
-                                           p = 0.50,
+                                           p = 0.75,
                                            groups=1,
                                            list=FALSE)
 
 train <- penguins_clean[part_index_1, ]
-tune_and_test <- penguins_clean[-part_index_1, ]
+test <- penguins_clean[-part_index_1, ]
 
 #The we need to use the function again to create the tuning set 
 
-tune_and_test_index <- createDataPartition(tune_and_test$Sex,
-                                           p = .5,
-                                           list = FALSE,
-                                           times = 1)
-
-tune <- tune_and_test[tune_and_test_index, ]
-test <- tune_and_test[-tune_and_test_index, ]
-
-
 dim(train)
 dim(test)
-dim(tune)
 ```
 
 
@@ -211,6 +201,8 @@ fig
 
 ```
 
+From the plot, we see that the error starts to even out at 100 trees so we'll change the model to 100 trees. 
+
 
 ## Optimizing the Random Forest Model 
 ```{r}
@@ -222,13 +214,13 @@ penguins_RF_2 = randomForest(Sex~.,          #<- Formula: response variable ~ pr
                             #subset = NULL,      #<- This is unnecessary because we're using all the rows in the training data set.
                             #xtest = NULL,       #<- This is already defined in the formula by the ".".
                             #ytest = NULL,       #<- This is already defined in the formula by "PREGNANT".
-                            ntree = 600,        #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
+                            ntree = 200,        #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
                             mtry = 3,            #<- Number of variables randomly sampled as candidates at each split. Default number for classification is sqrt(# of variables). Default number for regression is (# of variables / 3).
                             replace = TRUE,      #<- Should sampled data points be replaced.
                             #classwt = NULL,     #<- Priors of the classes. Use this if you want to specify what proportion of the data SHOULD be in each class. This is relevant if your sample data is not completely representative of the actual population 
                             #strata = NULL,      #<- Not necessary for our purpose here.
-                            sampsize = 25,      #<- Size of sample to draw each time.
-                            nodesize = 5,        #<- Minimum numbers of data points in terminal nodes.
+                            sampsize = 30,      #<- Size of sample to draw each time.
+                            nodesize = 3,        #<- Minimum numbers of data points in terminal nodes.
                             #maxnodes = NULL,    #<- Limits the number of maximum splits. 
                             importance = TRUE,   #<- Should importance of predictors be assessed?
                             #localImp = FALSE,   #<- Should casewise importance measure be computed? (Setting this to TRUE will override importance.)
@@ -242,6 +234,7 @@ penguins_RF_2 = randomForest(Sex~.,          #<- Formula: response variable ~ pr
 ## Comparison between the Random Forest Models 
 ```{r}
 penguins_RF$confusion 
+penguins_RF_2$confusion
 #   0  1 class.error
 #0 73  9  0.10975610
 #1  7 74  0.08641975
@@ -260,14 +253,15 @@ penguins_RF_2$confusion
 #0 72 10  0.12195122
 #1 11 70   0.1358025
 
+varImpPlot(penguins_RF_2, main = "Important Factors for Identifying the Sex of Penguins", color = "blue", lcolor = "orange")
 ``` 
 
-Based on the results from the confusion matrix, the first model has a lower classification error rate than the second model. The first model is better at classifying both 
 
 
+## Predictions with the Training Data Set 
 ```{r}
 penguins_predict = predict(penguins_RF_2,      #<- a randomForest model
-                            test,      #<- the test data set to use
+                            train,      #<- the train data set to use
                             type = "response",   #<- what results to produce, see the help menu for the options
                             predict.all = TRUE,  #<- should the predictions of all trees be kept?
                             proximity = FALSE)    #<- should proximity measures be computed
@@ -276,22 +270,109 @@ View(penguins_predict)
 View(penguins_predict$aggregate)
 View(penguins_predict$individual)
 
-penguins_test_pred = data.frame(test,Prediction = penguins_predict$aggregate)
+penguins_train_pred = data.frame(train,Prediction = penguins_predict$aggregate)
+View(penguins_train_pred)
+
+# Create a confusion matrix 
+confusionMatrix(penguins_train_pred$Prediction, penguins_train_pred$Sex, positive="1",dnn=c("Prediction", "Actual"), mode="everything")
+
+
+```
+* write about evaluation metrics here and which ones mean the most 
+* sensitivity, and specificity
+* less gentoo -- but not a significant imbalance
+* accuracy -- data is balanced 
+* talk about prevalence -- The data shows a baserate of 49.6% male penguins. 
+
+## Predictions with the Test Data Set 
+```{r}
+penguins_predict_test = predict(penguins_RF_2,      #<- a randomForest model
+                            test,      #<- the test data set to use
+                            type = "response",   #<- what results to produce, see the help menu for the options
+                            predict.all = TRUE,  #<- should the predictions of all trees be kept?
+                            proximity = FALSE)    #<- should proximity measures be computed
+
+View(penguins_predict_test)
+View(penguins_predict_test$aggregate)
+View(penguins_predict_test$individual)
+
+penguins_test_pred = data.frame(test,Prediction = penguins_predict_test$aggregate)
 View(penguins_test_pred)
 
 # Create a confusion matrix 
 confusionMatrix(penguins_test_pred$Prediction, penguins_test_pred$Sex, positive="1",
                 dnn=c("Prediction", "Actual"), mode="everything")
 
-
 ```
+- talk about evaluation metrics for testing data here 
 
-
-
+### ROC Curve 
 ```{r}
-hist(treesize(penguins_RF_2, terminal=FALSE))
+penguins_RF_2_prediction = as.data.frame(as.numeric(as.character(penguins_RF_2$votes[,2])))
+View(penguins_RF_2_prediction)
+
+# Let's also take the actual classification of each data point and convert
+# it to a data frame with numbers. R classifies a point in either bucket 
+# at a 50% threshold.
+penguins_train_actual = data.frame(train[,8])
+
+View(penguins_train_actual)
+
+penguins_prediction_comparison = prediction(penguins_RF_2_prediction,           
+                                             penguins_train_actual)#<- a list or data frame with actual class assignments
+View(penguins_prediction_comparison)
+
+penguins_pred_performance = performance(penguins_prediction_comparison, 
+                                         measure = "tpr",    #<- performance measure to use for the evaluation
+                                         x.measure = "fpr")  #<- 2nd performance measure to use for the evaluation
+View(penguins_pred_performance)
+
+penguins_rates = data.frame(fp = penguins_prediction_comparison@fp,  #<- false positive classification.
+                             tp = penguins_prediction_comparison@tp,  #<- true positive classification.
+                             tn = penguins_prediction_comparison@tn,  #<- true negative classification.
+                             fn = penguins_prediction_comparison@fn)  #<- false negative classification.
+
+colnames(penguins_rates) = c("fp", "tp", "tn", "fn")
+
+View(penguins_rates)
+
+# Now let's calculate the true positive and false positive rates for the classification.
+str(penguins_rates)
+tpr = penguins_rates$tp / (penguins_rates$tp + penguins_rates$fn)
+fpr = penguins_rates$fp / (penguins_rates$fp + penguins_rates$tn)
+
+# Compare the values with the output of the performance() function, they are the same.
+penguins_rates_comparison = data.frame(penguins_pred_performance@x.values,
+                                        penguins_pred_performance@y.values,
+                                        fpr,
+                                        tpr)
+colnames(penguins_rates_comparison) = c("x.values","y.values","fpr","tpr") #<- rename columns accordingly.
+View(penguins_rates_comparison)
+
+# Now plot the results.
+plot(fpr,          #<- x-axis value.
+     tpr,          #<- y-axis value.
+     col = "blue",  #<- color of the line. 
+     type = "l")
+grid(col = "black")
+# The performance() function saves us a lot of time, and can be used directly
+# to plot the ROC curve.
+plot(penguins_pred_performance, 
+     col = "red", 
+     lwd = 3, 
+     main = "ROC curve")
+grid(col = "black")
+
+
+# Add a 45 degree line.
+abline(a = 0, 
+       b = 1,
+       lwd = 2,
+       lty = 2,
+       col = "gray")
 
 ```
+
 
 ## Final Results 
 
